@@ -2,5 +2,7 @@
 <resources>
     <dimen name="small_padding">8dp</dimen>
     <dimen name="layout_margin">16dp</dimen>
-    <dimen name="layout_padding">16dp</dimen>
+    <dimen name="layout_padding_left">16dp</dimen>
+    <dimen name="layout_padding_right">5dp</dimen>
+    <dimen name="left_of_scroller_gap">6dp</dimen>
 </resources>
