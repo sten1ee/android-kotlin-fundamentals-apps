@@ -24,7 +24,7 @@ class MainActivity : AppCompatActivity() {
         doneBtn = findViewById<Button>(R.id.done_button)
 
         doneBtn.setOnClickListener { addNickname() }
-        // nnLabel.setOnClickListener { removeNickname() }
+        nnLabel.setOnClickListener { removeNickname() }
     }
 
     private fun addNickname() {
@@ -42,5 +42,17 @@ class MainActivity : AppCompatActivity() {
             val inputMethodManager = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
             inputMethodManager.hideSoftInputFromWindow(doneBtn.windowToken, 0)
         }
+    }
+
+    private fun removeNickname() {
+        nnEdit.setText("")
+        nnEdit.visibility = View.VISIBLE
+        doneBtn.visibility = View.VISIBLE
+        nnLabel.visibility = View.GONE
+        nnEdit.requestFocus()
+
+        // Show the keyboard:
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.showSoftInput(nnEdit, 0)
     }
 }
