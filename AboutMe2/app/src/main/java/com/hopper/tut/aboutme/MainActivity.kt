@@ -13,21 +13,23 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        findViewById<Button>(R.id.done_button).setOnClickListener { doneBtnClicked(it as Button) }
+        findViewById<Button>(R.id.done_button).setOnClickListener { addNickname(it) }
 
     }
 
-    private fun doneBtnClicked(doneBtn: Button) {
+    private fun addNickname(doneBtn: View) {
         val nnEdit = findViewById<EditText>(R.id.nickname_edit)
-        val nnLabel = findViewById<TextView>(R.id.nickname_text)
         if (nnEdit.text.isBlank()) {
             if (nnEdit.text.isNotEmpty())
                 nnEdit.setText("")
         }
         else {
-            nnLabel.text = nnEdit.text.trim()
             nnEdit.visibility = View.GONE
-            doneBtn.visibility = View.GONE
+
+            findViewById<View>(R.id.done_button).visibility = View.GONE
+
+            val nnLabel = findViewById<TextView>(R.id.nickname_text)
+            nnLabel.text = nnEdit.text.trim()
             nnLabel.visibility = View.VISIBLE
         }
     }
