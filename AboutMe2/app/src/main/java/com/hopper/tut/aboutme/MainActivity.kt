@@ -6,7 +6,6 @@ import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
-import com.hopper.tut.aboutme.R.string.what_is_your_nickname
 
 class MainActivity : AppCompatActivity() {
 
@@ -14,18 +13,22 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        findViewById<Button>(R.id.done_button).setOnClickListener { done_btn ->
-            val nn_edit = findViewById<EditText>(R.id.nickname_edit)
-            val nn_label = findViewById<TextView>(R.id.nickname_text)
-            if (nn_edit.text.isBlank()) {
-                nn_edit.setText(resources.getText(what_is_your_nickname))
-                return@setOnClickListener
-            }
+        findViewById<Button>(R.id.done_button).setOnClickListener { doneBtnClicked(it as Button) }
 
-            nn_label.text = nn_edit.text
-            nn_edit.visibility = View.GONE
-            done_btn.visibility = View.GONE
-            nn_label.visibility = View.VISIBLE
+    }
+
+    private fun doneBtnClicked(doneBtn: Button) {
+        val nnEdit = findViewById<EditText>(R.id.nickname_edit)
+        val nnLabel = findViewById<TextView>(R.id.nickname_text)
+        if (nnEdit.text.isBlank()) {
+            if (nnEdit.text.isNotEmpty())
+                nnEdit.setText("")
+        }
+        else {
+            nnLabel.text = nnEdit.text.trim()
+            nnEdit.visibility = View.GONE
+            doneBtn.visibility = View.GONE
+            nnLabel.visibility = View.VISIBLE
         }
     }
 }
