@@ -11,26 +11,30 @@ import android.widget.TextView
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var nnEdit: EditText
+    private lateinit var nnLabel: TextView
+    private lateinit var doneBtn: Button
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        findViewById<Button>(R.id.done_button).setOnClickListener { addNickname(it) }
+        nnEdit  = findViewById<EditText>(R.id.nickname_edit)
+        nnLabel = findViewById<TextView>(R.id.nickname_text)
+        doneBtn = findViewById<Button>(R.id.done_button)
 
+        doneBtn.setOnClickListener { addNickname() }
+        // nnLabel.setOnClickListener { removeNickname() }
     }
 
-    private fun addNickname(doneBtn: View) {
-        val nnEdit = findViewById<EditText>(R.id.nickname_edit)
+    private fun addNickname() {
         if (nnEdit.text.isBlank()) {
             if (nnEdit.text.isNotEmpty())
                 nnEdit.setText("")
         }
         else {
             nnEdit.visibility = View.GONE
-
-            findViewById<View>(R.id.done_button).visibility = View.GONE
-
-            val nnLabel = findViewById<TextView>(R.id.nickname_text)
+            doneBtn.visibility = View.GONE
             nnLabel.text = nnEdit.text.trim()
             nnLabel.visibility = View.VISIBLE
 
