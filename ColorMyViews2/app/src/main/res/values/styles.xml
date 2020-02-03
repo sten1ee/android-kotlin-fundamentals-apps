@@ -17,10 +17,10 @@
         <item name="android:textColor">@android:color/white</item>
         <item name="android:fontFamily">@font/roboto_mono</item>
 
-        <item name="android:layout_marginTop">@dimen/margin_narrow</item>
-        <item name="android:layout_marginStart">@dimen/margin_narrow</item>
-        <item name="android:layout_marginEnd">@dimen/margin_narrow</item>
-        <item name="android:layout_marginBottom">@dimen/margin_narrow</item>
+        <item name="android:layout_marginTop">@dimen/margin_wide</item>
+        <item name="android:layout_marginStart">@dimen/margin_wide</item>
+        <item name="android:layout_marginEnd">@dimen/margin_wide</item>
+        <!--item name="android:layout_marginBottom">@dimen/margin_wide</item-->
 
     </style>
 
