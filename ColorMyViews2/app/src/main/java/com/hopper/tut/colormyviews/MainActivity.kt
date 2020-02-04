@@ -46,18 +46,16 @@ class MainActivity : AppCompatActivity() {
 }
 
 
-private fun <T: View>forEachEx(viewType: Class<T>, view: View, consume: (T) -> Unit) {
-    if (viewType.isInstance(view))
-        consume(view as T)
 
-    if (view is ViewGroup) {
-        view.children.forEach { childView ->
-            forEachEx(viewType, childView, consume)
-        }
-    }
+private fun <T: View> allViewsInViewGroup(viewType: KClass<T>, view: View): Sequence<T> = sequence {
+    if (viewType.isInstance(view))
+        yield (view as T)
+
+    if (view is ViewGroup)
+        yieldAll(view.children.flatMap { allViewsInViewGroup(viewType, it) })
 }
 
-private inline fun <reified T: View> forEach(viewType: Class<T>, view: View, noinline consume: (T) -> Unit) {
+private inline fun <reified T: View> forEach(view: View) {
 
-    forEachEx(viewType, view, consume)
+    allViewsInViewGroup(T::class, view)
 }
