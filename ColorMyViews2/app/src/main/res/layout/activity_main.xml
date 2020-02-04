@@ -59,4 +59,16 @@
         app:layout_constraintStart_toEndOf="@+id/box_2_text"
         app:layout_constraintTop_toBottomOf="@+id/box_4_text" />
 
+    <TextView
+        android:id="@+id/box_6_text"
+        style="@style/BigBox"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+
+        android:text="Ala-Bala (Box 7, no! Box 6)!"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/box_2_text"
+        />
+
 </androidx.constraintlayout.widget.ConstraintLayout>
