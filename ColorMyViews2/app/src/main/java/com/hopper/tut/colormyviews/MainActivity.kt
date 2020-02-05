@@ -47,7 +47,9 @@ class MainActivity : AppCompatActivity() {
     private fun makeColored(view: View) {
         //val viewIdx = view.id - R.id.box_1_text
         val oldColor = view.background?.let { (it as ColorDrawable).color }
-        view.setBackgroundColor(view2colorMap[view] ?: Color.GREEN) // colors[viewIdx % colors.size])
+        view.setBackgroundColor(view2colorMap[view] ?: Color.GREEN)
+        if (view2colorMap[view] == Color.YELLOW)
+            (view as TextView).setTextColor(Color.BLACK)
         oldColor?.let { view2colorMap[view] = it }
     }
 }

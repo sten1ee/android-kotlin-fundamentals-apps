@@ -72,4 +72,34 @@
         app:layout_constraintTop_toBottomOf="@id/box_2_text"
         />
 
+    <TextView
+        android:id="@+id/label_text"
+        style="@style/InfoBox"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/margin_wide"
+        android:layout_marginTop="@dimen/margin_wide"
+        android:text="How to play:"
+        android:textColor="@android:color/black"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="@+id/box_2_text"
+        app:layout_constraintHorizontal_bias="0.81"
+        app:layout_constraintHorizontal_chainStyle="spread"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/box_6_text" />
+
+    <TextView
+        android:id="@+id/info_text"
+        style="@style/InfoBox"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/margin_wide"
+        android:layout_marginEnd="@dimen/margin_wide"
+        android:text="Tap the buttons"
+        android:textSize="32sp"
+        app:layout_constraintBaseline_toBaselineOf="@id/label_text"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.73"
+        app:layout_constraintStart_toEndOf="@+id/label_text" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>
