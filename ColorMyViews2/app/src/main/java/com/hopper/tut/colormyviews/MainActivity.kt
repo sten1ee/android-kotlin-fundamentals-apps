@@ -1,14 +1,13 @@
 package com.hopper.tut.colormyviews
 
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.View
 import android.widget.TextView
 import android.view.ViewGroup
-import android.icu.lang.UCharacter.GraphemeClusterBreak.T
 import androidx.core.view.children
-import kotlin.reflect.KClass
 
 
 class MainActivity : AppCompatActivity() {
@@ -19,43 +18,55 @@ class MainActivity : AppCompatActivity() {
         setupListeners()
     }
 
-    val colors = arrayOf(Color.DKGRAY, Color.CYAN, Color.YELLOW, Color.MAGENTA, Color.BLUE, Color.LTGRAY)
+    val colors: Array<Int> = arrayOf(
+        Color.DKGRAY, Color.CYAN,
+        Color.YELLOW, Color.MAGENTA,
+        Color.rgb(0xff, 0x7f, 0x50), Color.GREEN, Color.BLUE)
 
     lateinit var views: List<View>
+    val view2colorMap = HashMap<View, Int>()
+
     fun setupListeners() {
         val views = mutableListOf<View>()
-        //collectAll<TextView>(window.decorView as ViewGroup, views)
 
-        forEach(TextView::class.java, window.decorView) { view ->
-            views.add(view)
-            view.setOnClickListener {makeColored(it)}
-        }
+        var count = 0
+        allViewsInViewGroup(window.decorView)
+            .filter {
+                it is TextView || it.id == R.id.top_layout
+            }
+            .forEach { view ->
+                view2colorMap[view] = colors[count++ % colors.size]
+                views.add(view)
+                view.setOnClickListener { makeColored(it) }
+            }
 
         this.views = views
     }
 
-    /**private inline fun <reified T: View, R> forEach(viewGroup: ViewGroup, noinline consume:  (T) -> R) {
-        forEachEx<T, R>(T::class.java, viewGroup, consume)
-    }*/
-
 
     private fun makeColored(view: View) {
-        val viewIdx = view.id - R.id.box_1_text
-        view.setBackgroundColor(colors[viewIdx % colors.size])
+        //val viewIdx = view.id - R.id.box_1_text
+        val oldColor = view.background?.let { (it as ColorDrawable).color }
+        view.setBackgroundColor(view2colorMap[view] ?: Color.GREEN) // colors[viewIdx % colors.size])
+        oldColor?.let { view2colorMap[view] = it }
     }
 }
 
 
-
-private fun <T: View> allViewsInViewGroup(viewType: KClass<T>, view: View): Sequence<T> = sequence {
-    if (viewType.isInstance(view))
-        yield (view as T)
+private fun allViewsInViewGroup(view: View): Sequence<View> = sequence {
+    yield(view)
 
     if (view is ViewGroup)
-        yieldAll(view.children.flatMap { allViewsInViewGroup(viewType, it) })
+        yieldAll(view.children.flatMap { allViewsInViewGroup(it) })
 }
 
-private inline fun <reified T: View> forEach(view: View) {
 
-    allViewsInViewGroup(T::class, view)
-}
+private inline fun <reified T: View> forEach(view: View, noinline consume: (T) -> Unit) =
+    allViewsInViewGroup(view)
+        .filterIsInstance<T>()
+        .forEach(consume)
+
+
+private inline fun <reified T: View> all(view: View) =
+    allViewsInViewGroup(view)
+        .filterIsInstance<T>()
