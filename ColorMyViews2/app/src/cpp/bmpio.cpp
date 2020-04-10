@@ -18,8 +18,8 @@
 #endif
 
 class Bitmap {
-    typedef unsigned char WORD[2];
-    typedef unsigned char DWORD[4];
+    typedef uint8_t  WORD[2];
+    typedef uint8_t  DWORD[4];
 
 public:
     struct FileHeader {
@@ -79,6 +79,7 @@ private:
 
 public:
     void* operator new(size_t objSize, const Bitmap& bmp) {
+        assert(bmp.totalMemSize() >= objSize);
         return new char[bmp.totalMemSize()];
     }
     void  operator delete(void* mem) { delete[] (char*)mem; }
