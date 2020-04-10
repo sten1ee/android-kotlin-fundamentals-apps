@@ -136,7 +136,7 @@ public:
         return res;
     }
 
-    uint32_t  avgPixels(uint32_t* pixels, size_t nPixels) {
+    static uint32_t  avgPixels(uint32_t* pixels, size_t nPixels) {
         double l[4] = { .0, .0, .0, .0 };
         for (size_t i = 0; i < nPixels; ++i) {
             uint32_t val = pixels[i];
@@ -153,7 +153,7 @@ public:
         return avg;
     }
 
-    double RGB_to_linear(uint8_t val) {
+    static double RGB_to_linear(uint8_t val) {
         double s = val / 255.;
         if (s <= 0.04045)
             return s / 12.92;
@@ -161,7 +161,7 @@ public:
             return pow((s + 0.055) / (1 + 0.055), 2.4);
     }
 
-    uint8_t  linear_to_RGB(double s) {
+    static uint8_t  linear_to_RGB(double s) {
         double q;
         if (s <= 0.0031308)
             q = 12.92 * s;
