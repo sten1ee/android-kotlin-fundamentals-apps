@@ -101,9 +101,9 @@ public:
     //int bytesPerPixel() const { return toDWORD(infoHdr.biBitCount) >> 3; }
     int bytesPerLine()  const { return (bitsPerPixel() * imgWidth() + 31) / 32 * 4; }
 
-    const unsigned char*   imgData() const { return (const unsigned char*)this + imgOffset(); }
-          unsigned char*   imgData()       { return       (unsigned char*)this + imgOffset(); }
-          size_t  imgSize() const { return toDWORD(infoHdr.biImgSize); }
+    const uint8_t* imgData() const { return (const uint8_t*)this + imgOffset(); }
+          uint8_t* imgData()       { return       (uint8_t*)this + imgOffset(); }
+          size_t   imgSize() const { return toDWORD(infoHdr.biImgSize); }
 
     static Bitmap*  Load(const char* filepath);
     static bool     Store(const Bitmap* bmp, const char* filepath);
