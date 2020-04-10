@@ -5,7 +5,9 @@
 #include <iostream>
 #include <fstream>
 #include <cassert>
+#include <cmath>
 
+using namespace std;
 
 #ifdef NDEBUG
 # define DLOG(E) ((void)0)
@@ -99,17 +101,83 @@ public:
     int imgWidth()  const { return toDWORD(infoHdr.biWidth); }
 
     int bitsPerPixel()  const { return toDWORD(infoHdr.biBitCount); }
-    //int bytesPerPixel() const { return toDWORD(infoHdr.biBitCount) >> 3; }
+    int bytesPerPixel() const { return bitsPerPixel() >> 3; }
     int bytesPerLine()  const { return (bitsPerPixel() * imgWidth() + 31) / 32 * 4; }
 
     const uint8_t* imgData() const { return (const uint8_t*)this + imgOffset(); }
           uint8_t* imgData()       { return       (uint8_t*)this + imgOffset(); }
           size_t   imgSize() const { return toDWORD(infoHdr.biImgSize); }
 
+    uint32_t  pixel(int x, int y) const {
+        //TODO
+        return 0;
+    }
+
+    void  setPixel(int x, int y, uint32_t val) {
+        //TODO
+    }
+
+    void  darken() {
+        for (size_t i=0; i < imgSize(); ++i) {
+            //imgData()[i] = (imgData()[i] > 50 ? imgData()[i] - 50 : 0);
+            imgData()[i] = imgData()[i] * 4 / 5;
+        }
+    }
+
+    Bitmap* shrinkTwice() {
+        Bitmap* res; //TODO initialize properly to (w/2, h/2)
+        for (int h=0; h < imgHeight(); h += 2) {
+            for (int w=0; w < imgWidth(); w += 2) {
+                uint32_t p[] = { pixel(w, h),     pixel(w + 1, h),
+                                 pixel(w, h + 1), pixel(w + 1, h + 1) };
+                res->setPixel(w/2, h/2, avgPixels(p, sizeof(p)/sizeof(p[0])));
+            }
+        }
+        return res;
+    }
+
+    uint32_t  avgPixels(uint32_t* pixels, size_t nPixels) {
+        double l[4] = { .0, .0, .0, .0 };
+        for (size_t i = 0; i < nPixels; ++i) {
+            uint32_t val = pixels[i];
+            l[0] += RGB_to_linear(val & 0xff);
+            l[1] += RGB_to_linear(val >>  8 & 0xff);
+            l[2] += RGB_to_linear(val >> 16 & 0xff);
+            l[3] += RGB_to_linear(val >> 24 & 0xff);
+        }
+        uint32_t avg =
+            linear_to_RGB(l[0] / nPixels)
+          | linear_to_RGB(l[1] / nPixels) <<  8
+          | linear_to_RGB(l[2] / nPixels) << 16
+          | linear_to_RGB(l[3] / nPixels) << 24;
+        return avg;
+    }
+
+    double RGB_to_linear(uint8_t val) {
+        double s = val / 255.;
+        if (s <= 0.04045)
+            return s / 12.92;
+        else
+            return pow((s + 0.055) / (1 + 0.055), 2.4);
+    }
+
+    uint8_t  linear_to_RGB(double s) {
+        double q;
+        if (s <= 0.0031308)
+            q = 12.92 * s;
+        else
+            q = (1 + 0.055) * pow(s, 1/2.4) - 0.055;
+        assert(0. <= q);
+        assert(q <= 1.);
+        if (q < 0) return 0;
+        if (q > 1) return 255;
+        return (uint8_t)round(q * 255);
+   }
+
     static Bitmap*  Load(const char* filepath);
     static bool     Store(const Bitmap* bmp, const char* filepath);
 
-    void  printHeaders(std::ostream& os) const;
+    void  printHeaders(ostream& os) const;
 };
 
 
@@ -120,19 +188,19 @@ static_assert(sizeof(Bitmap) == sizeof(Bitmap::FileHeader) + sizeof(Bitmap::Info
     " or the compiler aligns struct members on > 2bytes boundary");
 
 
-std::ostream& operator << (std::ostream& os, const Bitmap& bmp)
+ostream& operator << (ostream& os, const Bitmap& bmp)
 {
     bmp.printHeaders(os);
     return os;
 }
 
 
-void  Bitmap::printHeaders(std::ostream& os) const
+void  Bitmap::printHeaders(ostream& os) const
 {
     assert((char*)&fileHdr.fileSize - (char*)&fileHdr.signature == 2);
     os << "BMP {"
     << "\n   FileHeader:"
-       << "\n\tWORD   signature: " << std::hex << toWORD(fileHdr.signature) <<std::dec
+       << "\n\tWORD   signature: " << hex << toWORD(fileHdr.signature) <<dec
        << "\n\tDWORD  fileSize: " << toDWORD(fileHdr.fileSize)
        << "\n\tDWORD  reserved: " << toDWORD(fileHdr.reserved)
        << "\n\tDWORD  imgOffset: " << toDWORD(fileHdr.imgOffset)
@@ -154,9 +222,9 @@ void  Bitmap::printHeaders(std::ostream& os) const
 
 Bitmap* Bitmap::Load(const char* filepath)
 {
-	std::ifstream file(filepath, std::ios::binary);
+	ifstream file(filepath, ios::binary);
 	if(!file) {
-		std::cerr << "Failed to open file '" << filepath << "'\n";
+		cerr << "Failed to open file '" << filepath << "'\n";
 		return nullptr;
 	}
 
@@ -166,7 +234,7 @@ Bitmap* Bitmap::Load(const char* filepath)
 	DLOG(bmp);
 
 	if(toWORD(bmp.fileHdr.signature) != 0x4D42) {
-		std::cerr << "File '" << filepath << "' isn't a bitmap file\n";
+		cerr << "File '" << filepath << "' isn't a bitmap file\n";
 		return nullptr;
 	}
 
@@ -180,9 +248,9 @@ Bitmap* Bitmap::Load(const char* filepath)
 	file.read((char*)res->imgData(), res->imgSize());
 
     // Check if there's some unused data left in the file after image data:
-	std::streampos readEnd = file.tellg();
-	file.seekg(0, std::ios_base::end);
-	std::streampos fileEnd = file.tellg();
+	streampos readEnd = file.tellg();
+	file.seekg(0, ios_base::end);
+	streampos fileEnd = file.tellg();
 	DLOG((fileEnd - readEnd) << " bytes of data unused at end of file\n");
 
     return res;
@@ -191,9 +259,9 @@ Bitmap* Bitmap::Load(const char* filepath)
 
 bool Bitmap::Store(const Bitmap* bmp, const char* filepath)
 {
-	std::ofstream file(filepath, std::ios::binary);
+	ofstream file(filepath, ios::binary);
 	if(!file) {
-		std::cerr << "Failed to write to file '" << filepath << "'\n";
+		cerr << "Failed to write to file '" << filepath << "'\n";
 		return false;
 	}
 
@@ -209,7 +277,7 @@ int  main(int argc, char* argv[])
     assert(argc == 2);
     Bitmap* bmp = Bitmap::Load(argv[1]);
     //bmp->darken();
-    bool ok = Bitmap::Store(bmp, (std::string(argv[1]) + ".copy.bmp").c_str());
+    bool ok = Bitmap::Store(bmp, (string(argv[1]) + ".copy.bmp").c_str());
     assert(ok);
     delete bmp;
 }
