@@ -55,44 +55,101 @@ public:
     };
 
 private:
-    FileHeader fileHdr;
+    size_t  _imgOffset;
+    size_t  _hdrSize; // byte size of the following header (including this DWORD)
+    size_t  _width;
+    size_t  _height;
+    size_t  _bitsPerPixel;
+    size_t  _imgSize;
+    bool    _isV1Hdr;
+
+    mutable FileHeader fileHdr;
     union {
-        V1xInfoHeader v1InfoHdr;
-        V2xInfoHeader infoHdr;
+        mutable V1xInfoHeader v1InfoHdr;
+        mutable V2xInfoHeader infoHdr;
     };
 
-    static inline uint16_t  toWORD(const WORD bytes) {
 #ifdef __LITTLE_ENDIAN__
+    static inline uint16_t  fromWORD(const WORD bytes) {
         return *(uint16_t*)bytes;
-#elif  __BIG_ENDIAN__
-        return (uint16_t)bytes[0] << 8 | (uint16_t)bytes[1];
-#else
-#   error Unexpected endianness!
-#endif
     }
 
-    static inline uint32_t  toDWORD(const DWORD bytes) {
-#ifdef __LITTLE_ENDIAN__
+    static inline void  intoWORD(const WORD bytes, uint16_t val) {
+        *(uint16_t*)bytes = val;
+    }
+
+    static inline uint32_t  fromDWORD(const DWORD bytes) {
         return *(uint32_t*)bytes;
+    }
+
+    static inline void  intoDWORD(const DWORD bytes, uint32_t val) {
+        *(uint32_t*)bytes = val;
+    }
+
 #elif  __BIG_ENDIAN__
+    static inline uint16_t  fromWORD(const WORD bytes) {
+        return (uint16_t)bytes[0] << 8 | (uint16_t)bytes[1];
+    }
+
+    static inline void  intoWORD(const WORD bytes, uint16_t val) {
+        *(uint16_t*)bytes = (val & 0xff) << 8 | (val >> 8);
+    }
+
+    static inline void  fromDWORD(const DWORD bytes) {
         return (uint32_t)bytes[0] << 24 | (uint32_t)bytes[1] << 16
              | (uint32_t)bytes[2] <<  8 | (uint32_t)bytes[3];
+    }
+
+    static inline void  intoDWORD(const DWORD bytes, uint32_t val) {
+        *(uint32_t*)bytes = (val << 24) | (val & 0xff00) << 8
+                          | (val & 0xff0000) >>  8 | (val >> 24);
+    }
+
 #else
 #   error Unexpected endianness!
 #endif
-    }
 
     uint32_t totalMemSize() const {
-        return toDWORD(fileHdr.imgOffset) + toDWORD(infoHdr.imgSize);
+        return sizeof(Bitmap) + _imgSize;
     }
 
-    uint32_t imgOffset() const {
-        assert(toDWORD(fileHdr.imgOffset) >= sizeof(Bitmap));
-        return toDWORD(fileHdr.imgOffset);
+    void onLoad() {
+        _imgOffset = fromDWORD(fileHdr.imgOffset);
+        _hdrSize   = fromDWORD(fileHdr.hdrSize);
+
+        if (_isV1Hdr) {
+            _width  = fromWORD(v1InfoHdr.width);
+            _height = fromWORD(v1InfoHdr.height);
+            _bitsPerPixel = fromDWORD(v1InfoHdr.bitsPerPixel);
+            assert(0);
+            _imgSize = 0; // TODO figure out effective img size in this case
+        }
+        else {
+            _width  = fromDWORD(infoHdr.width);
+            _height = fromDWORD(infoHdr.height);
+            _bitsPerPixel = fromDWORD(infoHdr.bitsPerPixel);
+            _imgSize = fromDWORD(infoHdr.imgSize);
+        }
     }
 
-    uint32_t hdrSize() const {
-        return toDWORD(fileHdr.hdrSize);
+    void onStore() const {
+        intoDWORD(fileHdr.imgOffset, 14U + _hdrSize);
+        intoDWORD(fileHdr.hdrSize, _hdrSize);
+
+        if (_isV1Hdr) {
+            intoWORD(v1InfoHdr.width, _width);
+            intoWORD(v1InfoHdr.height, _height);
+            intoDWORD(v1InfoHdr.bitsPerPixel, _bitsPerPixel);
+            assert(0);
+            // TODO there's no imgSize field in this case:
+            // intoDWORD(v1InfoHdr.imgSize, _imgSize);
+        }
+        else {
+            intoDWORD(infoHdr.width, _width);
+            intoDWORD(infoHdr.height, _height);
+            intoDWORD(infoHdr.bitsPerPixel, _bitsPerPixel);
+            intoDWORD(infoHdr.imgSize, _imgSize);
+        }
     }
 
 public:
@@ -113,16 +170,17 @@ public:
 
    ~Bitmap() { DLOG("Bitmap destroyed\n"); }
 
-    int imgHeight() const { return toDWORD(infoHdr.height); }
-    int imgWidth()  const { return toDWORD(infoHdr.width); }
+    int imgOffset() const { return _imgOffset; }
+    int imgSize()   const { return _imgSize; }
+    int imgHeight() const { return _height; }
+    int imgWidth()  const { return _width; }
 
-    int bitsPerPixel()  const { return toDWORD(infoHdr.bitsPerPixel); }
+    int bitsPerPixel()  const { return _bitsPerPixel; }
     int bytesPerPixel() const { return bitsPerPixel() >> 3; }
     int bytesPerLine()  const { return (bitsPerPixel() * imgWidth() + 31) / 32 * 4; }
 
-    const uint8_t* imgData() const { return (const uint8_t*)this + imgOffset(); }
-          uint8_t* imgData()       { return       (uint8_t*)this + imgOffset(); }
-          size_t   imgSize() const { return toDWORD(infoHdr.imgSize); }
+    const uint8_t* imgData() const { return (const uint8_t*)this + sizeof(Bitmap); }
+          uint8_t* imgData()       { return       (uint8_t*)this + sizeof(Bitmap); }
 
     uint32_t  pixel(int x, int y) const {
         //TODO
@@ -216,22 +274,22 @@ void  Bitmap::printHeaders(ostream& os) const
     assert((char*)&fileHdr.fileSize - (char*)&fileHdr.signature == 2);
     os << "BMP {"
     << "\n   FileHeader:"
-       << "\n\tWORD   signature: " << hex << toWORD(fileHdr.signature) <<dec
-       << "\n\tDWORD  fileSize: " << toDWORD(fileHdr.fileSize)
-       << "\n\tDWORD  reserved: " << toDWORD(fileHdr.reserved)
-       << "\n\tDWORD  imgOffset: " << toDWORD(fileHdr.imgOffset)
+       << "\n\tWORD   signature: " << hex << fromWORD(fileHdr.signature) <<dec
+       << "\n\tDWORD  fileSize: " << fromDWORD(fileHdr.fileSize)
+       << "\n\tDWORD  reserved: " << fromDWORD(fileHdr.reserved)
+       << "\n\tDWORD  imgOffset: " << fromDWORD(fileHdr.imgOffset)
     << "\n   InfoHeader:"
-       << "\n\tDWORD  biSize: " << toDWORD(fileHdr.hdrSize)
-       << "\n\tDWORD  width: " << toDWORD(infoHdr.width)
-       << "\n\tDWORD  height: " << toDWORD(infoHdr.height)
-       << "\n\tWORD   numPlanes: " << toWORD(infoHdr.numPlanes)
-       << "\n\tWORD   bitsPerPixel: " << toWORD(infoHdr.bitsPerPixel)
-       << "\n\tDWORD  compression: " << toDWORD(infoHdr.compression)
-       << "\n\tDWORD  imgSize: " << toDWORD(infoHdr.imgSize)
-       << "\n\tDWORD  xResolution: " << toDWORD(infoHdr.xResolution)
-       << "\n\tDWORD  yResolution: " << toDWORD(infoHdr.yResolution)
-       << "\n\tDWORD  colorsUsed: " << toDWORD(infoHdr.colorsUsed)
-       << "\n\tDWORD  colorsImportant: " << toDWORD(infoHdr.colorsImportant)
+       << "\n\tDWORD  hdrSize: " << fromDWORD(fileHdr.hdrSize)
+       << "\n\tDWORD  width: " << fromDWORD(infoHdr.width)
+       << "\n\tDWORD  height: " << fromDWORD(infoHdr.height)
+       << "\n\tWORD   numPlanes: " << fromWORD(infoHdr.numPlanes)
+       << "\n\tWORD   bitsPerPixel: " << fromWORD(infoHdr.bitsPerPixel)
+       << "\n\tDWORD  compression: " << fromDWORD(infoHdr.compression)
+       << "\n\tDWORD  imgSize: " << fromDWORD(infoHdr.imgSize)
+       << "\n\tDWORD  xResolution: " << fromDWORD(infoHdr.xResolution)
+       << "\n\tDWORD  yResolution: " << fromDWORD(infoHdr.yResolution)
+       << "\n\tDWORD  colorsUsed: " << fromDWORD(infoHdr.colorsUsed)
+       << "\n\tDWORD  colorsImportant: " << fromDWORD(infoHdr.colorsImportant)
        << "\n}\n";
 }
 
@@ -249,23 +307,22 @@ Bitmap* Bitmap::Load(const char* filepath)
 	file.read((char*)&bmp.fileHdr, sizeof(bmp.fileHdr));
 	DLOG(bmp);
 
-	if(toWORD(bmp.fileHdr.signature) != 0x4D42) {
+	if(fromWORD(bmp.fileHdr.signature) != 0x4D42) {
 		cerr << "File '" << filepath << "' isn't a bitmap file\n";
 		return nullptr;
 	}
 
-	switch (bmp.hdrSize()) {
-        case 12:
-            file.read((char*)&bmp.v1InfoHdr, sizeof(bmp.v1InfoHdr));
-            break;
+	switch (bmp._hdrSize = fromDWORD(bmp.fileHdr.hdrSize)) {
         case 40:
         case 64:
+            bmp._isV1Hdr = false;
             file.read((char*)&bmp.infoHdr, sizeof(bmp.infoHdr));
             break;
         default:
-            cerr << "Unknown BMP format variant (hdrSize=" << bmp.hdrSize() << ")\n";
+            cerr << "Unknown BMP format variant (hdrSize=" << bmp._hdrSize << ")\n";
             return nullptr;
 	}
+	bmp.onLoad();
 	DLOG(bmp);
 
 	// Allocate the resultant Bitmap object on the heap:
@@ -295,8 +352,12 @@ bool Bitmap::Store(const Bitmap* bmp, const char* filepath)
 		return false;
 	}
 
+	bmp->onStore();
     DLOG("Storing bmp '" << filepath << "' of size " << bmp->totalMemSize() << "\n");
-	file.write((char*)bmp, bmp->totalMemSize());
+    assert(!bmp->_isV1Hdr);
+	file.write((char*)&bmp->fileHdr, sizeof(bmp->fileHdr));
+	file.write((char*)&bmp->infoHdr, sizeof(bmp->infoHdr));
+	file.write((char*)bmp->imgData(), bmp->imgSize());
     file.close();
     return !file.fail();
 }
