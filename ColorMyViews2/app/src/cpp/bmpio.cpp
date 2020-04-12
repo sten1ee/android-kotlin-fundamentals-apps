@@ -29,25 +29,37 @@ public:
       DWORD  fileSize;
       DWORD  reserved;
       DWORD  imgOffset;
+      DWORD  hdrSize; // byte size of the following header (including this DWORD)
     };
 
-    struct InfoHeader {
-      DWORD  biSize;
-      DWORD  biWidth;
-      DWORD  biHeight;
-      WORD   biPlanes;
-      WORD   biBitCount;
-      DWORD  biCompression;
-      DWORD  biImgSize;
-      DWORD  biXPelsPerMeter;
-      DWORD  biYPelsPerMeter;
-      DWORD  biClrUsed;
-      DWORD  biClrImportant;
+    struct V2xInfoHeader { // 40 bytes in total
+    //DWORD  hdrSize;          // Size of this header in bytes
+      DWORD  width;
+      DWORD  height;
+      WORD   numPlanes;
+      WORD   bitsPerPixel;
+      DWORD  compression;
+      DWORD  imgSize;
+      DWORD  xResolution;
+      DWORD  yResolution;
+      DWORD  colorsUsed;
+      DWORD  colorsImportant;
+    };
+
+    struct V1xInfoHeader { // 12 bytes in total;
+      //DWORD hdrSize;         // Size of this header in bytes
+        WORD  width;           // Image width in pixels
+        WORD  height;          // Image height in pixels
+        WORD  numPlanes;       // Number of color planes
+        WORD  bitsPerPixel;    // Number of bits per pixel
     };
 
 private:
     FileHeader fileHdr;
-    InfoHeader infoHdr;
+    union {
+        V1xInfoHeader v1InfoHdr;
+        V2xInfoHeader infoHdr;
+    };
 
     static inline uint16_t  toWORD(const WORD bytes) {
 #ifdef __LITTLE_ENDIAN__
@@ -71,12 +83,16 @@ private:
     }
 
     uint32_t totalMemSize() const {
-        return toDWORD(fileHdr.imgOffset) + toDWORD(infoHdr.biImgSize);
+        return toDWORD(fileHdr.imgOffset) + toDWORD(infoHdr.imgSize);
     }
 
     uint32_t imgOffset() const {
         assert(toDWORD(fileHdr.imgOffset) >= sizeof(Bitmap));
         return toDWORD(fileHdr.imgOffset);
+    }
+
+    uint32_t hdrSize() const {
+        return toDWORD(fileHdr.hdrSize);
     }
 
 public:
@@ -97,16 +113,16 @@ public:
 
    ~Bitmap() { DLOG("Bitmap destroyed\n"); }
 
-    int imgHeight() const { return toDWORD(infoHdr.biHeight); }
-    int imgWidth()  const { return toDWORD(infoHdr.biWidth); }
+    int imgHeight() const { return toDWORD(infoHdr.height); }
+    int imgWidth()  const { return toDWORD(infoHdr.width); }
 
-    int bitsPerPixel()  const { return toDWORD(infoHdr.biBitCount); }
+    int bitsPerPixel()  const { return toDWORD(infoHdr.bitsPerPixel); }
     int bytesPerPixel() const { return bitsPerPixel() >> 3; }
     int bytesPerLine()  const { return (bitsPerPixel() * imgWidth() + 31) / 32 * 4; }
 
     const uint8_t* imgData() const { return (const uint8_t*)this + imgOffset(); }
           uint8_t* imgData()       { return       (uint8_t*)this + imgOffset(); }
-          size_t   imgSize() const { return toDWORD(infoHdr.biImgSize); }
+          size_t   imgSize() const { return toDWORD(infoHdr.imgSize); }
 
     uint32_t  pixel(int x, int y) const {
         //TODO
@@ -181,11 +197,11 @@ public:
 };
 
 
-static_assert(14 == sizeof(Bitmap::FileHeader), "Bitmap file header should be exactly 14 bytes!");
+static_assert(14 + 4 == sizeof(Bitmap::FileHeader), "Bitmap file header should be exactly 14 bytes!");
 
-static_assert(sizeof(Bitmap) == sizeof(Bitmap::FileHeader) + sizeof(Bitmap::InfoHeader),
-    "Either someone has added a member to the Bitmap class"
-    " or the compiler aligns struct members on > 2bytes boundary");
+//static_assert(sizeof(Bitmap) == sizeof(Bitmap::FileHeader) + sizeof(Bitmap::InfoHeader),
+//    "Either someone has added a member to the Bitmap class"
+//    " or the compiler aligns struct members on > 2bytes boundary");
 
 
 ostream& operator << (ostream& os, const Bitmap& bmp)
@@ -205,17 +221,17 @@ void  Bitmap::printHeaders(ostream& os) const
        << "\n\tDWORD  reserved: " << toDWORD(fileHdr.reserved)
        << "\n\tDWORD  imgOffset: " << toDWORD(fileHdr.imgOffset)
     << "\n   InfoHeader:"
-       << "\n\tDWORD  biSize: " << toDWORD(infoHdr.biSize)
-       << "\n\tDWORD  biWidth: " << toDWORD(infoHdr.biWidth)
-       << "\n\tDWORD  biHeight: " << toDWORD(infoHdr.biHeight)
-       << "\n\tWORD   biPlanes: " << toWORD(infoHdr.biPlanes)
-       << "\n\tWORD   biBitCount: " << toWORD(infoHdr.biBitCount)
-       << "\n\tDWORD  biCompression: " << toDWORD(infoHdr.biCompression)
-       << "\n\tDWORD  biImgSize: " << toDWORD(infoHdr.biImgSize)
-       << "\n\tDWORD  biXPelsPerMeter: " << toDWORD(infoHdr.biXPelsPerMeter)
-       << "\n\tDWORD  biYPelsPerMeter: " << toDWORD(infoHdr.biYPelsPerMeter)
-       << "\n\tDWORD  biClrUsed: " << toDWORD(infoHdr.biClrUsed)
-       << "\n\tDWORD  biClrImportant: " << toDWORD(infoHdr.biClrImportant)
+       << "\n\tDWORD  biSize: " << toDWORD(fileHdr.hdrSize)
+       << "\n\tDWORD  width: " << toDWORD(infoHdr.width)
+       << "\n\tDWORD  height: " << toDWORD(infoHdr.height)
+       << "\n\tWORD   numPlanes: " << toWORD(infoHdr.numPlanes)
+       << "\n\tWORD   bitsPerPixel: " << toWORD(infoHdr.bitsPerPixel)
+       << "\n\tDWORD  compression: " << toDWORD(infoHdr.compression)
+       << "\n\tDWORD  imgSize: " << toDWORD(infoHdr.imgSize)
+       << "\n\tDWORD  xResolution: " << toDWORD(infoHdr.xResolution)
+       << "\n\tDWORD  yResolution: " << toDWORD(infoHdr.yResolution)
+       << "\n\tDWORD  colorsUsed: " << toDWORD(infoHdr.colorsUsed)
+       << "\n\tDWORD  colorsImportant: " << toDWORD(infoHdr.colorsImportant)
        << "\n}\n";
 }
 
@@ -230,13 +246,27 @@ Bitmap* Bitmap::Load(const char* filepath)
 
 	Bitmap bmp;
 
-	file.read((char*)&bmp, sizeof(Bitmap));
+	file.read((char*)&bmp.fileHdr, sizeof(bmp.fileHdr));
 	DLOG(bmp);
 
 	if(toWORD(bmp.fileHdr.signature) != 0x4D42) {
 		cerr << "File '" << filepath << "' isn't a bitmap file\n";
 		return nullptr;
 	}
+
+	switch (bmp.hdrSize()) {
+        case 12:
+            file.read((char*)&bmp.v1InfoHdr, sizeof(bmp.v1InfoHdr));
+            break;
+        case 40:
+        case 64:
+            file.read((char*)&bmp.infoHdr, sizeof(bmp.infoHdr));
+            break;
+        default:
+            cerr << "Unknown BMP format variant (hdrSize=" << bmp.hdrSize() << ")\n";
+            return nullptr;
+	}
+	DLOG(bmp);
 
 	// Allocate the resultant Bitmap object on the heap:
 	Bitmap* res = new (bmp) Bitmap(bmp);
