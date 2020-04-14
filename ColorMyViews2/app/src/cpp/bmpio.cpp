@@ -334,22 +334,22 @@ void  Bitmap::printHeaders(ostream& os) const
 
 Bitmap::Type  Bitmap::Load(const char* filepath)
 {
-	ifstream file(filepath, ios::binary);
-	if(!file) {
-		cerr << "Failed to open file '" << filepath << "'\n";
-		return nullptr;
-	}
+    ifstream file(filepath, ios::binary);
+    if(!file) {
+        cerr << "Failed to open file '" << filepath << "'\n";
+        return nullptr;
+    }
 
-	Bitmap bmp;
+    Bitmap bmp;
 
-	file.read((char*)&bmp.fileHdr, sizeof(bmp.fileHdr));
+    file.read((char*)&bmp.fileHdr, sizeof(bmp.fileHdr));
 
-	if(fromWORD(bmp.fileHdr.signature) != 0x4D42) {
-		cerr << "File '" << filepath << "' isn't a bitmap file\n";
-		return nullptr;
-	}
+    if(fromWORD(bmp.fileHdr.signature) != 0x4D42) {
+        cerr << "File '" << filepath << "' isn't a bitmap file\n";
+        return nullptr;
+    }
 
-	switch (bmp._hdrSize = fromDWORD(bmp.fileHdr.hdrSize)) {
+    switch (bmp._hdrSize = fromDWORD(bmp.fileHdr.hdrSize)) {
         case 40:
         case 64:
             bmp._isV1Hdr = false;
@@ -358,25 +358,25 @@ Bitmap::Type  Bitmap::Load(const char* filepath)
         default:
             cerr << "Unknown BMP format variant (hdrSize=" << bmp._hdrSize << ")\n";
             return nullptr;
-	}
-	bmp.onLoad();
-	DLOG("Loaded " << bmp << " from file path=" << filepath << "\n");
+    }
+    bmp.onLoad();
+    DLOG("Loaded " << bmp << " from file path=" << filepath << "\n");
 
-	// Allocate the resultant Bitmap object on the heap:
-	Bitmap* res = new (bmp.totalMemSize()) Bitmap(bmp);
+    // Allocate the resultant Bitmap object on the heap:
+    Bitmap* res = new (bmp.totalMemSize()) Bitmap(bmp);
 
-	// Go to where image data starts and read it:
-	DLOG("reading image data (offset=" << res->imgOffset()
-	                      << ", size=" << res->imgSize() << ") ... ");
-	file.seekg(res->imgOffset());
-	file.read((char*)res->imgData(), res->imgSize());
+    // Go to where image data starts and read it:
+    DLOG("reading image data (offset=" << res->imgOffset()
+                          << ", size=" << res->imgSize() << ") ... ");
+    file.seekg(res->imgOffset());
+    file.read((char*)res->imgData(), res->imgSize());
 
 #ifndef NDEBUG
     // Check if there's some unused data left in the file after image data:
-	streampos readEnd = file.tellg();
-	file.seekg(0, ios_base::end);
-	streampos fileEnd = file.tellg();
-	DLOG((fileEnd - readEnd) << " bytes of data unused at end of file\n");
+    streampos readEnd = file.tellg();
+    file.seekg(0, ios_base::end);
+    streampos fileEnd = file.tellg();
+    DLOG((fileEnd - readEnd) << " bytes of data unused at end of file\n");
 #endif
 
     return res;
@@ -385,18 +385,18 @@ Bitmap::Type  Bitmap::Load(const char* filepath)
 
 bool Bitmap::Store(const Bitmap::Type bmp, const char* filepath)
 {
-	ofstream file(filepath, ios::binary);
-	if(!file) {
-		cerr << "Failed to write to file '" << filepath << "'\n";
-		return false;
-	}
+    ofstream file(filepath, ios::binary);
+    if(!file) {
+        cerr << "Failed to write to file '" << filepath << "'\n";
+        return false;
+    }
 
-	bmp->onStore();
+    bmp->onStore();
     DLOG("Storing " << *bmp << " into file path=" << filepath << "\n");
     assert(!bmp->_isV1Hdr);
-	file.write((char*)&bmp->fileHdr, sizeof(bmp->fileHdr));
-	file.write((char*)&bmp->infoHdr, sizeof(bmp->infoHdr));
-	file.write((char*)bmp->imgData(), bmp->imgSize());
+    file.write((char*)&bmp->fileHdr, sizeof(bmp->fileHdr));
+    file.write((char*)&bmp->infoHdr, sizeof(bmp->infoHdr));
+    file.write((char*)bmp->imgData(), bmp->imgSize());
     file.close();
     return !file.fail();
 }
