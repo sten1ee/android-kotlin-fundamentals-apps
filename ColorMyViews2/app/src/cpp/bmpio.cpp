@@ -60,7 +60,6 @@ private:
     size_t  _width;
     size_t  _height;
     size_t  _bitsPerPixel;
-    size_t  _imgSize;
     bool    _isV1Hdr;
 
     mutable FileHeader fileHdr;
@@ -111,7 +110,7 @@ private:
 
     // Total mem size allocated for this Bitmap object on the heap:
     uint32_t totalMemSize() const {
-        return sizeof(Bitmap) + _imgSize;
+        return sizeof(Bitmap) + imgSize();
     }
 
     // Calculate the mem size required by the 'img' portion of a Bitmap having
@@ -136,14 +135,11 @@ private:
             _width  = fromWORD(v1InfoHdr.width);
             _height = fromWORD(v1InfoHdr.height);
             _bitsPerPixel = fromDWORD(v1InfoHdr.bitsPerPixel);
-            assert(0); // TODO compute effective img size in this case (having width, height & bpp):
-            _imgSize = 0;
         }
         else {
             _width  = fromDWORD(infoHdr.width);
             _height = fromDWORD(infoHdr.height);
             _bitsPerPixel = fromDWORD(infoHdr.bitsPerPixel);
-            _imgSize = fromDWORD(infoHdr.imgSize);
         }
     }
 
@@ -162,7 +158,7 @@ private:
             intoDWORD(infoHdr.width, _width);
             intoDWORD(infoHdr.height, _height);
             intoDWORD(infoHdr.bitsPerPixel, _bitsPerPixel);
-            intoDWORD(infoHdr.imgSize, _imgSize);
+            intoDWORD(infoHdr.imgSize, imgSize());
         }
     }
 
@@ -177,21 +173,33 @@ public:
         memset(this, 0, sizeof(Bitmap));
         DLOG("Hollow Bitmap created\n");
     }
+
     Bitmap(const Bitmap& bmp) {
         *this = bmp;
-        DLOG("Bitmap copy created (totalMemSize=" << totalMemSize() << ")\n");
+        DLOG("Bitmap copy created (W = " << imgWidth()
+                             << ", H = " << imgHeight()
+                             << ", totalMemSize=" << totalMemSize() << ")\n");
+    }
+
+    Bitmap(const Bitmap& bmp, size_t width, size_t height) {
+        *this = bmp;
+        _width = width;
+        _height = height;
+        DLOG("Bitmap resize created (W = " << imgWidth()
+                               << ", H = " << imgHeight()
+                               << ", totalMemSize=" << totalMemSize() << ")\n");
     }
 
    ~Bitmap() { DLOG("Bitmap destroyed\n"); }
 
-    int imgOffset() const { return _imgOffset; }
-    int imgSize()   const { return _imgSize; }
-    int imgHeight() const { return _height; }
-    int imgWidth()  const { return _width; }
-
     int bitsPerPixel()  const { return _bitsPerPixel; }
     int bytesPerPixel() const { return bitsPerPixel() >> 3; }
     int bytesPerLine()  const { return (bitsPerPixel() * imgWidth() + 31) / 32 * 4; }
+
+    int imgOffset() const { return _imgOffset; }
+    int imgSize()   const { return imgSizeFor(_width, _height); }
+    int imgHeight() const { return _height; }
+    int imgWidth()  const { return _width; }
 
     const uint8_t* imgData() const { return (const uint8_t*)this + sizeof(Bitmap); }
           uint8_t* imgData()       { return       (uint8_t*)this + sizeof(Bitmap); }
@@ -220,10 +228,12 @@ public:
         }
     }
 
-    Bitmap* shrinkTwice() const {
-        Bitmap* res = new (totalMemSizeFor(imgWidth()/2, imgHeight()/2)) Bitmap(*this);
-        for (size_t h=0; h < imgHeight(); h += 2) {
-            for (size_t w=0; w < imgWidth(); w += 2) {
+    Bitmap* halfShrunk() const {
+        const size_t W = imgWidth();
+        const size_t H = imgHeight();
+        Bitmap* res = new (totalMemSizeFor(W/2, H/2)) Bitmap(*this, W/2, H/2);
+        for (size_t h=0; h < H; h += 2) {
+            for (size_t w=0; w < W; w += 2) {
                 uint32_t p[] = { pixel(w, h),     pixel(w + 1, h),
                                  pixel(w, h + 1), pixel(w + 1, h + 1) };
                 res->setPixel(w/2, h/2, avgPixels(p, sizeof(p)/sizeof(p[0])));
@@ -346,7 +356,7 @@ Bitmap* Bitmap::Load(const char* filepath)
             return nullptr;
 	}
 	bmp.onLoad();
-	DLOG(bmp);
+	DLOG("Loaded " << bmp << " from file path=" << filepath << "\n");
 
 	// Allocate the resultant Bitmap object on the heap:
 	Bitmap* res = new (bmp.totalMemSize()) Bitmap(bmp);
@@ -378,7 +388,7 @@ bool Bitmap::Store(const Bitmap* bmp, const char* filepath)
 	}
 
 	bmp->onStore();
-    DLOG("Storing bmp '" << filepath << "' of size " << bmp->totalMemSize() << "\n");
+    DLOG("Storing " << *bmp << " into file path=" << filepath << "\n");
     assert(!bmp->_isV1Hdr);
 	file.write((char*)&bmp->fileHdr, sizeof(bmp->fileHdr));
 	file.write((char*)&bmp->infoHdr, sizeof(bmp->infoHdr));
@@ -391,9 +401,10 @@ bool Bitmap::Store(const Bitmap* bmp, const char* filepath)
 int  main(int argc, char* argv[])
 {
     assert(argc == 2);
-    Bitmap* bmp = Bitmap::Load(argv[1]);
-    //bmp->darken();
-    bool ok = Bitmap::Store(bmp, (string(argv[1]) + ".copy.bmp").c_str());
-    assert(ok);
+    Bitmap* bmp(Bitmap::Load(argv[1]));
+    Bitmap* halfBmp(bmp->halfShrunk());
+    bool ok = Bitmap::Store(halfBmp, (string(argv[1]) + ".half.bmp").c_str());
+    delete halfBmp;
     delete bmp;
+    return ok ? 0 : -1;
 }
