@@ -1,5 +1,5 @@
 //
-// Created by Stanislav Jordanov on 9.04.20.
+// Created by Stanislav Jordanov on 10.04.20.
 //
 #include <cstdint>
 #include <iostream>
@@ -113,6 +113,20 @@ private:
         return sizeof(Bitmap) + _imgSize;
     }
 
+    // Calculate the mem size required by the 'img' portion of a Bitmap having
+    // all properties same as this's but different image dimensions:
+    uint32_t  imgSizeFor(size_t imgWidth, size_t imgHeight) const {
+        return imgHeight * ((bitsPerPixel() * imgWidth + 31) / 32 * 4);
+    }
+
+    // Calculate the total mem size required for a Bitmap object having
+    // all properties same as this's but different image dimensions:
+    uint32_t totalMemSizeFor(size_t imgWidth, size_t imgHeight) const {
+        return sizeof(Bitmap) + imgSizeFor(imgWidth, imgHeight);
+    }
+
+    // *After* loading the bitmap headers structs from a file,
+    // onLoad() will extract the important properties:
     void onLoad() {
         _imgOffset = fromDWORD(fileHdr.imgOffset);
         _hdrSize   = fromDWORD(fileHdr.hdrSize);
@@ -121,8 +135,8 @@ private:
             _width  = fromWORD(v1InfoHdr.width);
             _height = fromWORD(v1InfoHdr.height);
             _bitsPerPixel = fromDWORD(v1InfoHdr.bitsPerPixel);
-            assert(0);
-            _imgSize = 0; // TODO figure out effective img size in this case
+            assert(0); // TODO compute effective img size in this case (having width, height & bpp):
+            _imgSize = 0;
         }
         else {
             _width  = fromDWORD(infoHdr.width);
@@ -132,6 +146,8 @@ private:
         }
     }
 
+    // *Before* storing the bitmap into a file,
+    // onStore() will transfer the (important) properties into the headers structs:
     void onStore() const {
         intoDWORD(fileHdr.imgOffset, 14U + _hdrSize);
         intoDWORD(fileHdr.hdrSize, _hdrSize);
@@ -140,9 +156,6 @@ private:
             intoWORD(v1InfoHdr.width, _width);
             intoWORD(v1InfoHdr.height, _height);
             intoDWORD(v1InfoHdr.bitsPerPixel, _bitsPerPixel);
-            assert(0);
-            // TODO there's no imgSize field in this case:
-            // intoDWORD(v1InfoHdr.imgSize, _imgSize);
         }
         else {
             intoDWORD(infoHdr.width, _width);
@@ -153,9 +166,9 @@ private:
     }
 
 public:
-    void* operator new(size_t objSize, const Bitmap& bmp) {
-        assert(bmp.totalMemSize() >= objSize);
-        return new char[bmp.totalMemSize()];
+    void* operator new(size_t objSize, size_t totalMemSize) {
+        assert(totalMemSize >= objSize);
+        return new char[totalMemSize];
     }
     void  operator delete(void* mem) { delete[] (char*)mem; }
 
@@ -198,10 +211,10 @@ public:
         }
     }
 
-    Bitmap* shrinkTwice() {
-        Bitmap* res; //TODO initialize properly to (w/2, h/2)
-        for (int h=0; h < imgHeight(); h += 2) {
-            for (int w=0; w < imgWidth(); w += 2) {
+    Bitmap* shrinkTwice() const {
+        Bitmap* res = new (totalMemSizeFor(imgWidth()/2, imgHeight()/2)) Bitmap(*this);
+        for (size_t h=0; h < imgHeight(); h += 2) {
+            for (size_t w=0; w < imgWidth(); w += 2) {
                 uint32_t p[] = { pixel(w, h),     pixel(w + 1, h),
                                  pixel(w, h + 1), pixel(w + 1, h + 1) };
                 res->setPixel(w/2, h/2, avgPixels(p, sizeof(p)/sizeof(p[0])));
@@ -218,6 +231,7 @@ public:
             l[1] += RGB_to_linear(val >>  8 & 0xff);
             l[2] += RGB_to_linear(val >> 16 & 0xff);
             l[3] += RGB_to_linear(val >> 24 & 0xff);
+            // TODO: in 'real world' the alpha channel should be 'averaged' in a diff way ...
         }
         uint32_t avg =
             linear_to_RGB(l[0] / nPixels)
@@ -243,6 +257,7 @@ public:
             q = (1 + 0.055) * pow(s, 1/2.4) - 0.055;
         assert(0. <= q);
         assert(q <= 1.);
+
         if (q < 0) return 0;
         if (q > 1) return 255;
         return (uint8_t)round(q * 255);
@@ -305,7 +320,6 @@ Bitmap* Bitmap::Load(const char* filepath)
 	Bitmap bmp;
 
 	file.read((char*)&bmp.fileHdr, sizeof(bmp.fileHdr));
-	DLOG(bmp);
 
 	if(fromWORD(bmp.fileHdr.signature) != 0x4D42) {
 		cerr << "File '" << filepath << "' isn't a bitmap file\n";
@@ -326,7 +340,7 @@ Bitmap* Bitmap::Load(const char* filepath)
 	DLOG(bmp);
 
 	// Allocate the resultant Bitmap object on the heap:
-	Bitmap* res = new (bmp) Bitmap(bmp);
+	Bitmap* res = new (bmp.totalMemSize()) Bitmap(bmp);
 
 	// Go to where image data starts and read it:
 	DLOG("reading image data (offset=" << res->imgOffset()
@@ -334,11 +348,13 @@ Bitmap* Bitmap::Load(const char* filepath)
 	file.seekg(res->imgOffset());
 	file.read((char*)res->imgData(), res->imgSize());
 
+#ifndef NDEBUG
     // Check if there's some unused data left in the file after image data:
 	streampos readEnd = file.tellg();
 	file.seekg(0, ios_base::end);
 	streampos fileEnd = file.tellg();
 	DLOG((fileEnd - readEnd) << " bytes of data unused at end of file\n");
+#endif
 
     return res;
 }
