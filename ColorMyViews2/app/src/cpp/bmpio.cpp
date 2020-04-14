@@ -109,6 +109,7 @@ private:
 #   error Unexpected endianness!
 #endif
 
+    // Total mem size allocated for this Bitmap object on the heap:
     uint32_t totalMemSize() const {
         return sizeof(Bitmap) + _imgSize;
     }
@@ -196,12 +197,20 @@ public:
           uint8_t* imgData()       { return       (uint8_t*)this + sizeof(Bitmap); }
 
     uint32_t  pixel(int x, int y) const {
-        //TODO
-        return 0;
+        assert(_bitsPerPixel == 24 || _bitsPerPixel == 32);
+        const uint8_t* ppx = &imgData()[y * bytesPerLine() + x * bytesPerPixel()];
+        DWORD px;
+        px[3] = 0;
+        memcpy(px, ppx, _bitsPerPixel / 8);
+        return fromDWORD(px);
     }
 
     void  setPixel(int x, int y, uint32_t val) {
-        //TODO
+        assert(_bitsPerPixel == 24 || _bitsPerPixel == 32);
+        uint8_t* ppx = &imgData()[y * bytesPerLine() + x * bytesPerPixel()];
+        DWORD px;
+        intoDWORD(px, val);
+        memcpy(ppx, px, _bitsPerPixel / 8);
     }
 
     void  darken() {
