@@ -162,7 +162,6 @@ private:
         }
     }
 
-public:
     void* operator new(size_t objSize, size_t totalMemSize) {
         assert(totalMemSize >= objSize);
         return new char[totalMemSize];
@@ -221,27 +220,6 @@ public:
         memcpy(ppx, px, _bitsPerPixel / 8);
     }
 
-    void  darken() {
-        for (size_t i=0; i < imgSize(); ++i) {
-            //imgData()[i] = (imgData()[i] > 50 ? imgData()[i] - 50 : 0);
-            imgData()[i] = imgData()[i] * 4 / 5;
-        }
-    }
-
-    Bitmap* halfShrunk() const {
-        const size_t W = imgWidth();
-        const size_t H = imgHeight();
-        Bitmap* res = new (totalMemSizeFor(W/2, H/2)) Bitmap(*this, W/2, H/2);
-        for (size_t h=0; h < H; h += 2) {
-            for (size_t w=0; w < W; w += 2) {
-                uint32_t p[] = { pixel(w, h),     pixel(w + 1, h),
-                                 pixel(w, h + 1), pixel(w + 1, h + 1) };
-                res->setPixel(w/2, h/2, avgPixels(p, sizeof(p)/sizeof(p[0])));
-            }
-        }
-        return res;
-    }
-
     static uint32_t  avgPixels(uint32_t* pixels, size_t nPixels) {
         double l[4] = { .0, .0, .0, .0 };
         for (size_t i = 0; i < nPixels; ++i) {
@@ -260,6 +238,11 @@ public:
         return avg;
     }
 
+    /*  Based on the Python sources found in http://www.ericbrasseur.org/gamma.html
+     *  Note: As the domain of that function is [0..255], for performance reasons
+     *  its range of values should better be precomputed
+     *  thus the function evaluation will be reduced to a single array indexing.
+     */
     static double RGB_to_linear(uint8_t val) {
         double s = val / 255.;
         if (s <= 0.04045)
@@ -268,6 +251,11 @@ public:
             return pow((s + 0.055) / (1 + 0.055), 2.4);
     }
 
+    /* The reverse of RGB_to_linear (see the comment to the above function)
+     * As the range of this function is [0..255], for performance reasons
+     * it is worth experimenting with replacing this function with a search in
+     * the sorted array used in the optimized implementation of RGB_to_linear.
+     */
     static uint8_t  linear_to_RGB(double s) {
         double q;
         if (s <= 0.0031308)
@@ -282,25 +270,41 @@ public:
         return (uint8_t)round(q * 255);
    }
 
-    static Bitmap*  Load(const char* filepath);
-    static bool     Store(const Bitmap* bmp, const char* filepath);
-
+#ifndef NDEBUG
     void  printHeaders(ostream& os) const;
+    friend ostream& operator << (ostream& os, const Bitmap& bmp) {
+               bmp.printHeaders(os);
+               return os;
+           }
+#endif
+
+public:
+    typedef Bitmap* Type;
+
+    // Load a bitmap from the specified file location.
+    // May fail if the file open or file read operation fails.
+    // Only 24 and 32 bits per pixel bitmap files are supported
+    // If successful, caller should take care to Bitmap::Delete() the returned bitmap
+    // when it is no longer needed.
+    static Bitmap::Type  Load(const char* filepath);
+
+    // Store a bitmap into the specified file location.
+    // May fail if the file open or file write operation fails.
+    static bool          Store(const Bitmap::Type bmp, const char* filepath);
+
+    // Create a 50% scaled down version of the source bitmap.
+    // Only 24 and 32 bits per pixel bitmap files are supported.
+    // Caller should take care to Bitmap::Delete() the returned bitmap
+    // when it is no longer needed.
+    static Bitmap::Type  halfShrunkCopyOf(const Bitmap::Type src);
+
+    // Safely dispose of a bitmap that is no longer needed.
+    // Failing to do so will result in resource leak(s).
+    static void          Delete(Bitmap::Type bmp) { delete bmp; }
 };
 
 
 static_assert(14 + 4 == sizeof(Bitmap::FileHeader), "Bitmap file header should be exactly 14 bytes!");
-
-//static_assert(sizeof(Bitmap) == sizeof(Bitmap::FileHeader) + sizeof(Bitmap::InfoHeader),
-//    "Either someone has added a member to the Bitmap class"
-//    " or the compiler aligns struct members on > 2bytes boundary");
-
-
-ostream& operator << (ostream& os, const Bitmap& bmp)
-{
-    bmp.printHeaders(os);
-    return os;
-}
 
 
 void  Bitmap::printHeaders(ostream& os) const
@@ -328,7 +332,7 @@ void  Bitmap::printHeaders(ostream& os) const
 }
 
 
-Bitmap* Bitmap::Load(const char* filepath)
+Bitmap::Type  Bitmap::Load(const char* filepath)
 {
 	ifstream file(filepath, ios::binary);
 	if(!file) {
@@ -379,7 +383,7 @@ Bitmap* Bitmap::Load(const char* filepath)
 }
 
 
-bool Bitmap::Store(const Bitmap* bmp, const char* filepath)
+bool Bitmap::Store(const Bitmap::Type bmp, const char* filepath)
 {
 	ofstream file(filepath, ios::binary);
 	if(!file) {
@@ -398,13 +402,39 @@ bool Bitmap::Store(const Bitmap* bmp, const char* filepath)
 }
 
 
+Bitmap::Type  Bitmap::halfShrunkCopyOf(const Bitmap::Type src)
+{
+    const size_t W = src->imgWidth();
+    const size_t H = src->imgHeight();
+    Bitmap* res = new (src->totalMemSizeFor(W/2, H/2)) Bitmap(*src, W/2, H/2);
+    for (size_t h=0; h < H; h += 2) {
+        for (size_t w=0; w < W; w += 2) {
+            uint32_t p[] = { src->pixel(w, h),     src->pixel(w + 1, h),
+                             src->pixel(w, h + 1), src->pixel(w + 1, h + 1) };
+            res->setPixel(w/2, h/2, avgPixels(p, sizeof(p)/sizeof(p[0])));
+        }
+    }
+    return res;
+}
+
+
 int  main(int argc, char* argv[])
 {
-    assert(argc == 2);
-    Bitmap* bmp(Bitmap::Load(argv[1]));
-    Bitmap* halfBmp(bmp->halfShrunk());
+    if (argc != 2) {
+        cerr << "Program should be invoked like this:\n\t" << argv[0] << " <path-to-src-bitmap>\n";
+        return -1;
+    }
+
+    Bitmap::Type srcBmp = Bitmap::Load(argv[1]);
+    if (!srcBmp) // hehe - illegal ! here, as Bitmap::Type is supposedly opaque type ...
+        return -2;
+
+    Bitmap::Type halfBmp = Bitmap::halfShrunkCopyOf(srcBmp);
+
     bool ok = Bitmap::Store(halfBmp, (string(argv[1]) + ".half.bmp").c_str());
-    delete halfBmp;
-    delete bmp;
-    return ok ? 0 : -1;
+
+    Bitmap::Delete(halfBmp);
+    Bitmap::Delete(srcBmp);
+
+    return ok ? 0 : -3;
 }
